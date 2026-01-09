@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Calculadora Científica Gráfica</title>
+    <style>
+        body { font-family: sans-serif; background-color: #1e1e1e; color: white; text-align: center; padding: 20px; }
+        
+        .container { max-width: 800px; margin: 0 auto; }
+
+        canvas {
+            background-color: #fff;
+            border-radius: 4px;
+            cursor: crosshair;
+            box-shadow: 0 0 20px rgba(0,255,0, 0.2);
+        }
+
+        .controls { margin-top: 20px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+
+        button {
+            padding: 10px; background: #333; color: #0f0; border: 1px solid #0f0;
+            cursor: pointer; font-weight: bold; transition: 0.2s;
+        }
+        button:hover { background: #0f0; color: #000; }
+        
+        h1 { color: #0f0; text-shadow: 0 0 10px #0f0; font-family: 'Courier New', monospace; }
+        p { color: #ccc; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>📉 Plotter Científico C+Wasm</h1>
+        <p>Selecione uma função para renderizar via WebAssembly</p>
+
+        <canvas id="meuGrafico" width="800" height="500"></canvas>
+
+        <div class="controls">
+            <button onclick="desenhar('sin')">Seno (sin)</button>
+            <button onclick="desenhar('cos')">Cosseno (cos)</button>
+            <button onclick="desenhar('tan')">Tangente (tan)</button>
+            <button onclick="desenhar('quad')">Parábola (x²)</button>
+            <button onclick="desenhar('exp')">Exponencial (eˣ)</button>
+        </div>
+    </div>
+
+    <script>
+        let wasm = null;
+        const canvas = document.getElementById('meuGrafico');
+        const ctx = canvas.getContext('2d');
+        
+        // Configurações de Zoom e Escala
+        const SCALE = 40; // 40 pixels = 1 unidade matemática (Zoom)
+        const CENTER_X = canvas.width / 2;
+        const CENTER_Y = canvas.height / 2;
+
+        // Carrega o C
+        fetch('math.wasm')
+            .then(res => res.arrayBuffer())
+            .then(bytes => WebAssembly.instantiate(bytes))
+            .then(results => {
+                wasm = results.instance.exports;
+                desenharEixos(); // Desenha a cruz inicial
+            });
+
+        // Limpa a tela e desenha a cruz (X e Y)
+        function desenharEixos() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.beginPath();
+            ctx.strokeStyle = "#ddd";
+            ctx.lineWidth = 1;
+
+            // Eixo X
+            ctx.moveTo(0, CENTER_Y);
+            ctx.lineTo(canvas.width, CENTER_Y);
+
+            // Eixo Y
+            ctx.moveTo(CENTER_X, 0);
+            ctx.lineTo(CENTER_X, canvas.height);
+            ctx.stroke();
+        }
+
+        function desenhar(tipoFuncao) {
+            if (!wasm) return;
+
+            // 1. Limpa a tela
+            desenharEixos();
+
+            ctx.beginPath();
+            ctx.strokeStyle = "#ff0000"; // Cor da linha do gráfico
+            ctx.lineWidth = 2;
+
+            // 2. Loop principal: Percorre CADA pixel da largura da tela
+            for (let pixelX = 0; pixelX < canvas.width; pixelX++) {
+                
+                // Mapeia pixel da tela para coordenada matemática
+                // Ex: Se pixelX é 400 (meio), mathX vira 0.
+                let mathX = (pixelX - CENTER_X) / SCALE;
+                
+                let mathY = 0;
+
+                // Chama o C para calcular o Y
+                if (tipoFuncao === 'sin') mathY = wasm.func_sin(mathX);
+                else if (tipoFuncao === 'cos') mathY = wasm.func_cos(mathX);
+                else if (tipoFuncao === 'tan') mathY = wasm.func_tan(mathX);
+                else if (tipoFuncao === 'quad') mathY = wasm.func_quad(mathX);
+                else if (tipoFuncao === 'exp') mathY = wasm.func_exp(mathX);
+
+                // Mapeia coordenada matemática de volta para pixel da tela
+                // O Y no computador cresce para baixo, por isso o sinal de menos (-)
+                let pixelY = CENTER_Y - (mathY * SCALE);
+
+                // Se for o primeiro ponto, move a caneta, senão desenha linha
+                if (pixelX === 0) {
+                    ctx.moveTo(pixelX, pixelY);
+                } else {
+                    ctx.lineTo(pixelX, pixelY);
+                }
+            }
+            
+            ctx.stroke(); // Finaliza o desenho
+        }
+    </script>
+</body>
+</html>
